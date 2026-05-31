@@ -1,0 +1,119 @@
+# =============================================================
+# ci.yml
+# GitHub Actions — CI/CD SaaS Subscription Analytics Platform
+# =============================================================
+
+name: CI - SaaS Analytics
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-sql:
+    name: Validate SQL Files
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: saas_analytics
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Aguardar PostgreSQL
+        run: |
+          until pg_isready -h localhost -p 5432 -U postgres; do
+            echo "Aguardando PostgreSQL..."
+            sleep 2
+          done
+
+      - name: Executar DDL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -f sql/ddl/01_create_tables.sql
+
+      - name: Executar DML — dados iniciais
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -f sql/dml/01_insert_sample_data.sql
+
+      - name: Executar Functions
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -f sql/functions/01_create_functions.sql
+          psql -h localhost -U postgres -d saas_analytics -f sql/functions/02_create_functions.sql
+
+      - name: Executar Procedures
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -f sql/procedures/01_create_procedures.sql
+          psql -h localhost -U postgres -d saas_analytics -f sql/procedures/02_create_procedures.sql
+
+      - name: Executar Triggers
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -f sql/triggers/01_create_triggers.sql
+
+      - name: Executar Views
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -f sql/views/01_create_views.sql
+          psql -h localhost -U postgres -d saas_analytics -f sql/views/02_create_materialized_views.sql
+
+      - name: Executar Performance
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -f sql/performance/01_indexes_and_explain.sql
+
+      - name: Validar métricas SaaS
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d saas_analytics -c "SELECT fn_calculate_mrr() AS mrr;"
+          psql -h localhost -U postgres -d saas_analytics -c "SELECT fn_calculate_churn() AS churn_rate;"
+          psql -h localhost -U postgres -d saas_analytics -c "SELECT * FROM vw_saas_kpis;"
+
+  validate-terraform:
+    name: Validate Terraform
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.5
+
+      - name: Terraform Init
+        run: |
+          cd terraform
+          terraform init
+
+      - name: Terraform Validate
+        run: |
+          cd terraform
+          terraform validate
