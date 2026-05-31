@@ -1,4 +1,14 @@
 .DS_Store
 .env
+.env.*
 .venv
 .vscode/settings.json
+__pycache__/
+*.pyc
+*.pyo
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+*.log
+data/
